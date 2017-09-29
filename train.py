@@ -41,7 +41,7 @@ def main(_):
       train_step.run(feed_dict={x: batch[0], y_: batch[1], training: True})
 
     saver = tf.train.Saver()
-    saver.save(sess, FLAGS.output_dir + "/model", global_step=i)
+    saver.save(sess, FLAGS.output_dir + "/model")
 
     print('test accuracy %g' % accuracy.eval(feed_dict={
         x: mnist.test.images,

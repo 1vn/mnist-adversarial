@@ -6,7 +6,7 @@ import numpy as np
 from model import deepnn
 
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
-tf.flags.DEFINE_string("meta", "model-999.meta", "The saved meta graph")
+tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
 tf.flags.DEFINE_string("saved_model", "saved_model",
                        "The folder containing saved model")
 FLAGS = tf.app.flags.FLAGS
