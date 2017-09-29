@@ -45,7 +45,7 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
     return tf.less(i, epochs)
 
   def _body(x_adv, i):
-    ybar, logits = model(x_adv)
+    ybar, logits = model(x_adv, logits=True)
     loss = tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits)
     dy_dx, = tf.gradients(loss, x_adv)
     x_adv = tf.stop_gradient(x_adv + eps * tf.sign(dy_dx))
@@ -96,13 +96,18 @@ def main(_):
     # populate graph and get variables
     graph = tf.get_default_graph()
 
+    # workaround for get_variable bug
+    # https://github.com/tensorflow/tensorflow/issues/1325    
+    for t in tf.global_variables():
+      graph.get_tensor_by_name(t.name)
+
     x = graph.get_tensor_by_name("model/x:0")
     y_ = graph.get_tensor_by_name("model/y_:0")
     training = graph.get_tensor_by_name("model/mode:0")
     y = graph.get_tensor_by_name("model/y:0")
     accuracy = graph.get_tensor_by_name("model/acc:0")
 
-    batch = select_digit_samples(mnist)
+    batch = select_digit_samples(mnist, digit=2)
 
     # sanity check the accuracy
     print('pre perturbations accuracy: %g' % accuracy.eval(
@@ -111,9 +116,21 @@ def main(_):
                    training: False}))
 
     with tf.variable_scope('model', reuse=True):
-      x_adv = fgsm(deepnn, x, 0.01)
+      x_adv = fgsm(deepnn, x, 0.1)
 
-    adv_classifications = sess.run(y, {x: x_adv, y_: batch[1], training: 1.0})
+    X_adv = sess.run(
+        x_adv, feed_dict={x: batch[0],
+                          y_: batch[1],
+                          training: False})
+
+    print('post perturbations accuracy: %g' % accuracy.eval(
+        feed_dict={x: X_adv,
+                   y_: batch[1],
+                   training: False}))
+
+    output = []
+    for i in range(len(X_adv)):
+      output.append([X_adv[i], batch[0][i]])
 
 
 if __name__ == "__main__":
