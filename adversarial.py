@@ -11,6 +11,14 @@ FLAGS = tf.app.flags.FLAGS
 
 
 def select_digit_samples(data, digit=2, sample_size=10):
+  """Samples mnist data for specified digit
+
+  Args:
+    data: A tf.contrib.learn.base.Datasets object, contains processed mnist data
+    digit: An integer, the target digit to sample.
+    sample_size: An integer, number of samples to return.
+  """
+
   sample_images, sample_labels = [], []
 
   for i in range(0, len(data.test.images)):
@@ -52,6 +60,8 @@ def main(_):
 
     # sanity check the accuracy
     print('pre perturbations accuracy: %g' % accuracy.eval(feed_dict=feed_dict))
+
+    # 
 
 
 if __name__ == "__main__":
