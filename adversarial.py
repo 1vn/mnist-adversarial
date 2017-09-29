@@ -48,8 +48,10 @@ def main(_):
 
     feed_dict = {x: batch[0], y_: batch[1], keep_prob: 1.0}
 
-    classification = sess.run(y, feed_dict)
-    print(classification)
+    classifications = sess.run(y, feed_dict)
+
+    # sanity check the accuracy
+    print('pre perturbations accuracy: %g' % accuracy.eval(feed_dict=feed_dict))
 
 
 if __name__ == "__main__":
