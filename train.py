@@ -12,20 +12,23 @@ FLAGS = tf.app.flags.FLAGS
 def main(_):
   mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
 
-  x = tf.placeholder(tf.float32, [None, 784], name="x")
-  y_ = tf.placeholder(tf.float32, [None, 10], name='y_')
+  with tf.variable_scope('model'):
+    x = tf.placeholder(tf.float32, [None, 784], name="x")
+    y_ = tf.placeholder(tf.float32, [None, 10], name='y_')
 
-  training = tf.placeholder(bool, (), name='mode')
+    training = tf.placeholder(bool, (), name='mode')
 
-  y_conv = deepnn(x, training=training)
+    ybar, logits = deepnn(x, logits=True, training=training)
 
-  cross_entropy = tf.reduce_mean(
-      tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_conv),
-      name="cse")
+    cross_entropy = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits),
+        name="cse")
+
+    correct_prediction = tf.equal(tf.argmax(ybar, 1), tf.argmax(y_, 1))
+    accuracy = tf.reduce_mean(
+        tf.cast(correct_prediction, tf.float32), name="acc")
+
   train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
-
-  correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
-  accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="acc")
 
   with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())

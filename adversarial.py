@@ -30,7 +30,7 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
     """
   x_adv = tf.identity(x)
 
-  ybar, keep_prob = model(x_adv)
+  ybar = model(x_adv)
   yshape = tf.shape(ybar)
   ydim = yshape[1]
 
@@ -95,12 +95,12 @@ def main(_):
 
     # populate graph and get variables
     graph = tf.get_default_graph()
-    accuracy = graph.get_tensor_by_name("acc:0")
 
-    x = graph.get_tensor_by_name("x:0")
-    y_ = graph.get_tensor_by_name("y_:0")
-    training = graph.get_tensor_by_name("mode:0")
-    y = graph.get_tensor_by_name("y:0")
+    x = graph.get_tensor_by_name("model/x:0")
+    y_ = graph.get_tensor_by_name("model/y_:0")
+    training = graph.get_tensor_by_name("model/mode:0")
+    y = graph.get_tensor_by_name("model/y:0")
+    accuracy = graph.get_tensor_by_name("model/acc:0")
 
     batch = select_digit_samples(mnist)
 
@@ -108,11 +108,12 @@ def main(_):
     print('pre perturbations accuracy: %g' % accuracy.eval(
         feed_dict={x: batch[0],
                    y_: batch[1],
-                   keep_prob: False}))
+                   training: False}))
 
-    x_adv = fgsm(deepnn, x, 0.01)
+    with tf.variable_scope('model', reuse=True):
+      x_adv = fgsm(deepnn, x, 0.01)
 
-    adv_classifications = sess.run(y, {x: x_adv, y_: batch[1], keep_prob: 1.0})
+    adv_classifications = sess.run(y, {x: x_adv, y_: batch[1], training: 1.0})
 
 
 if __name__ == "__main__":
