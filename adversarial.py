@@ -4,6 +4,9 @@ import tensorflow as tf
 import numpy as np
 
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
+tf.flags.DEFINE_string("meta", "model-999.meta", "The saved meta graph")
+tf.flags.DEFINE_string("saved_model", "saved_model",
+                       "The folder containing saved model")
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -29,8 +32,8 @@ def main(_):
   with tf.Session() as sess:
 
     # restore model
-    saver = tf.train.import_meta_graph('model/model.ckpt-999.meta')
-    saver.restore(sess, tf.train.latest_checkpoint('model'))
+    saver = tf.train.import_meta_graph(FLAGS.saved_model + "/" + FLAGS.meta)
+    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.saved_model))
 
     # populate graph and get variables
     graph = tf.get_default_graph()
@@ -46,7 +49,7 @@ def main(_):
     feed_dict = {x: batch[0], y_: batch[1], keep_prob: 1.0}
 
     classification = sess.run(y, feed_dict)
-    saver.save(sess, 'model/model.ckpt')
+    print(classification)
 
 
 if __name__ == "__main__":
