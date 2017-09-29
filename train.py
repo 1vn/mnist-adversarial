@@ -28,9 +28,6 @@ def max_pool_2x2(x):
 
 
 def deepnn(x):
-  mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-  sess = tf.InteractiveSession()
-
   with tf.name_scope('conv1'):
     W_conv1 = weight_variable([5, 5, 1, 32])
     b_conv1 = bias_variable([32])
