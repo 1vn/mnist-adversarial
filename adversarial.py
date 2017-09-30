@@ -7,6 +7,9 @@ import numpy as np
 
 from model import deepnn
 
+tf.flags.DEFINE_integer("initial", 2,
+                        "Initial class selected for perturbations.")
+tf.flags.DEFINE_integer("target", 6, "Target class to pertubate to.")
 tf.flags.DEFINE_float("eps", 0.25, "Epsilon for FGSM.")
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
 tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
@@ -148,7 +151,7 @@ def main(_):
     y = graph.get_tensor_by_name("model/y:0")
     accuracy = graph.get_tensor_by_name("model/acc:0")
 
-    batch = select_digit_samples(mnist, digits=[2])
+    batch = select_digit_samples(mnist, digits=FLAGS.initial)
 
     # sanity check the accuracy
     prediction = tf.argmax(y, 1)
@@ -183,7 +186,7 @@ def main(_):
     #                training: False}))
 
     # apply target gradient transform
-    target_batch = select_digit_samples(mnist, digits=6)
+    target_batch = select_digit_samples(mnist, digits=FLAGS.target)
     with tf.variable_scope('model', reuse=True):
       grd = get_gradient(deepnn, x)
 
@@ -196,16 +199,23 @@ def main(_):
               y_: target_batch[1],
               training: False})
 
-    X_adv = batch[0] + np.sign(gradients_og) * FLAGS.eps / 5
-    X_adv = X_adv - np.sign(gradients_adv) * FLAGS.eps * 2
-    X_adv = np.clip(X_adv, 0.0, 1.0)
+    X_adv = batch[0][:]
 
+    X_adv = X_adv + np.sign(gradients_og) * 0.1
+    #X_adv = X_adv - np.sign(gradients_adv) * 0.5
+    for steps in range(1000):
+      X_adv = X_adv - np.sign(gradients_adv) * 0.001
+
+      classification = sess.run([prediction],
+                                {x: X_adv,
+                                 y_: batch[1],
+                                 training: False})
+
+    X_adv = np.clip(X_adv, 0.0, 1.0)
     classification = sess.run([prediction],
                               {x: X_adv,
                                y_: batch[1],
                                training: False})
-    percents = sess.run(y, {x: X_adv, y_: batch[1], training: False})
-    print(percents[0])
     print(classification)
     print('post target perturbations accuracy: %g' % accuracy.eval(
         feed_dict={x: X_adv,
