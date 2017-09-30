@@ -133,6 +133,8 @@ def main(_):
     })
 
     # wiggle pixels for each image
+
+    # for some reason this makes the output image better
     X_adv = np.array(batch[0][:])
     X_adv = X_adv + np.sign(gradients_og) * FLAGS.eps
     X_adv = X_adv - np.sign(gradients_adv) * FLAGS.eps
@@ -143,6 +145,7 @@ def main(_):
                                training: False})
 
     # wiggling
+    print("wiggling...")
     for i in range(len(X_adv)):
       count = 0
 
@@ -166,7 +169,6 @@ def main(_):
         #gradients_og = grd.eval({x: X_adv, y_: batch[1], training: False})
 
         percent = y.eval({x: X_adv, y_: batch[1], training: False})
-        print(i, percent[i][FLAGS.target], percent[i][classification[0][i]])
         count += 1
         if count == limit:
           print("exit due to limit")
