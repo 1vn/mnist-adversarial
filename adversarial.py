@@ -18,56 +18,7 @@ tf.flags.DEFINE_string("saved_model", "saved_model",
 FLAGS = tf.app.flags.FLAGS
 
 
-# ------------------------------------------------------#
-# from https://github.com/gongzhitaao/tensorflow-adversarial/blob/master/attacks/fgsm.py
-def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
-  """
-    Fast gradient sign method.
-    See https://arxiv.org/abs/1412.6572 and https://arxiv.org/abs/1607.02533 for
-    details.  This implements the revised version, since the original FGSM has
-    label leaking problem (https://arxiv.org/abs/1611.01236).
-    :param model: A wrapper that returns the output as well as logits.
-    :param x: The input placeholder.
-    :param eps: The scale factor for noise.
-    :param epochs: The maximum epoch to run.
-    :param clip_min: The minimum value in output.
-    :param clip_max: The maximum value in output.
-    :return: A tensor, contains adversarial samples for each input.
-    """
-  x_adv = tf.identity(x)
-
-  ybar = model(x_adv)
-  yshape = tf.shape(ybar)
-  ydim = yshape[1]
-
-  indices = tf.argmax(ybar, axis=1)
-  target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
-  eps = tf.abs(eps)
-
-  def _cond(x_adv, i):
-    return tf.less(i, epochs)
-
-  def _body(x_adv, i):
-    ybar, logits = model(x_adv, logits=True)
-    loss = tf.reduce_mean(
-        tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits),
-        name="cse")
-    dy_dx, = tf.gradients(loss, x_adv)
-    x_adv = tf.stop_gradient(x_adv + eps * tf.sign(dy_dx))
-    x_adv = tf.clip_by_value(x_adv, clip_min, clip_max)
-
-    return x_adv, i + 1
-
-  x_adv, _ = tf.while_loop(
-      _cond, _body, (x_adv, 0), back_prop=True, name='fgsm')
-
-  return x_adv
-
-
-# ------------------------------------------------------#
-
-
-def get_gradient(model, x, clip_min=0., clip_max=1.):
+def get_gradient(model, x, eps=0.25, clip_min=0., clip_max=1.):
   x_grd = tf.identity(x)
   ybar = model(x_grd)
   yshape = tf.shape(ybar)
@@ -166,51 +117,24 @@ def main(_):
                    y_: batch[1],
                    training: False}))
 
-    # with tf.variable_scope('model', reuse=True):
-    #   x_adv = fgsm(deepnn, x, FLAGS.eps, epochs=1)
-
-    # X_adv = sess.run(
-    #     x_adv, feed_dict={x: batch[0],
-    #                       y_: batch[1],
-    #                       training: False})
-
-    # classification = sess.run([prediction],
-    #                           {x: X_adv,
-    #                            y_: batch[1],
-    #                            training: False})
-
-    # print(classification)
-    # print('post perturbations accuracy: %g' % accuracy.eval(
-    #     feed_dict={x: X_adv,
-    #                y_: batch[1],
-    #                training: False}))
-
     # apply target gradient transform
     target_batch = select_digit_samples(mnist, digits=FLAGS.target)
     with tf.variable_scope('model', reuse=True):
-      grd = get_gradient(deepnn, x)
+      grd = get_gradient(deepnn, x, FLAGS.eps)
 
     # get initial class gradients 
-    gradients_og = sess.run(grd, {x: batch[0], y_: batch[1], training: False})
+    gradients_og = grd.eval({x: batch[0], y_: batch[1], training: False})
 
     # get gradients from classifying target
-    gradients_adv = sess.run(
-        grd, {x: target_batch[0],
-              y_: target_batch[1],
-              training: False})
+    gradients_adv = grd.eval({
+        x: target_batch[0],
+        y_: target_batch[1],
+        training: False
+    })
 
     X_adv = batch[0][:]
-
-    X_adv = X_adv + np.sign(gradients_og) * 0.1
-    #X_adv = X_adv - np.sign(gradients_adv) * 0.5
-    for steps in range(1000):
-      X_adv = X_adv - np.sign(gradients_adv) * 0.001
-
-      classification = sess.run([prediction],
-                                {x: X_adv,
-                                 y_: batch[1],
-                                 training: False})
-
+    X_adv = X_adv + np.sign(gradients_og) * FLAGS.eps
+    X_adv = X_adv - np.sign(gradients_adv) * FLAGS.eps
     X_adv = np.clip(X_adv, 0.0, 1.0)
     classification = sess.run([prediction],
                               {x: X_adv,
