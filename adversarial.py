@@ -145,9 +145,10 @@ def main(_):
     # wiggling
     for i in range(len(X_adv)):
       count = 0
-      while classification[0][i] != FLAGS.target and count < 50:
-        X_adv[i] = X_adv[i] + np.sign(gradients_og[i]) * FLAGS.eps * 0.001
-        X_adv[i] = X_adv[i] - np.sign(gradients_adv[i]) * FLAGS.eps * 0.001
+      limit = 100
+      while classification[0][i] != FLAGS.target and count < limit:
+        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.001
+        X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps * 0.001
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
         classification = sess.run([prediction],
                                   {x: X_adv,
@@ -164,7 +165,7 @@ def main(_):
         percent = y.eval({x: X_adv, y_: batch[1], training: False})
         print(i, percent[i][FLAGS.target], percent[i][classification[0][i]])
         count += 1
-        if count == 50:
+        if count == limit:
           print("exit due to limit")
 
     classification = sess.run([prediction],
