@@ -1,3 +1,5 @@
+import os
+
 from tensorflow.examples.tutorials.mnist import input_data
 
 import tensorflow as tf
@@ -35,9 +37,7 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
   ydim = yshape[1]
 
   indices = tf.argmax(ybar, axis=1)
-  target = tf.cond(
-      tf.equal(ydim, 1), lambda: tf.nn.relu(tf.sign(0.5 - ybar)),
-      lambda: tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0))
+  target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
 
   eps = tf.abs(eps)
 
@@ -53,14 +53,22 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
     return x_adv, i + 1
 
   x_adv, _ = tf.while_loop(
-      _cond, _body, (x_adv, 0), back_prop=False, name='fgsm')
+      _cond, _body, (x_adv, 0), back_prop=True, name='fgsm')
+
   return x_adv
 
 
 # ------------------------------------------------------#
 
 
-def select_digit_samples(data, digit=2, sample_size=10):
+def save_images(images, filenames, output_dir):
+  for i, filename in enumerate(filenames):
+    with tf.gfile.Open(os.path.join(output_dir, filename), 'w') as f:
+      img = (((images[i, :, :, :] + 1.0) * 0.5) * 255.0).astype(np.uint8)
+      Image.fromarray(img).save(f, format='PNG')
+
+
+def select_digit_samples(data, digits=2, sample_size=10):
   """Samples mnist data for specified digit
 
   Args:
@@ -69,17 +77,21 @@ def select_digit_samples(data, digit=2, sample_size=10):
     sample_size: An integer, number of samples to return.
   """
 
+  if not isinstance(digits, list):
+    digits = [digits]
+
   sample_images, sample_labels = [], []
 
   for i in range(0, len(data.test.images)):
     image = data.test.images[i]
     label = data.test.labels[i]
 
-    if label[digit] == 1:
-      sample_images.append(image)
-      sample_labels.append(label)
+    for d in digits:
+      if label[d] == 1:
+        sample_images.append(image)
+        sample_labels.append(label)
 
-    if len(sample_images) > sample_size:
+    if len(sample_images) >= sample_size:
       break
 
   return sample_images, sample_labels
@@ -107,7 +119,7 @@ def main(_):
     y = graph.get_tensor_by_name("model/y:0")
     accuracy = graph.get_tensor_by_name("model/acc:0")
 
-    batch = select_digit_samples(mnist, digit=2)
+    batch = select_digit_samples(mnist, digits=[2])
 
     # sanity check the accuracy
     print('pre perturbations accuracy: %g' % accuracy.eval(
@@ -115,14 +127,28 @@ def main(_):
                    y_: batch[1],
                    training: False}))
 
+    prediction = tf.argmax(y, 1)
+    classification = sess.run([prediction],
+                              {x: batch[0],
+                               y_: batch[1],
+                               training: False})
+
+    print(classification)
+
     with tf.variable_scope('model', reuse=True):
-      x_adv = fgsm(deepnn, x, 0.1)
+      x_adv = fgsm(deepnn, x, 0.25)
 
     X_adv = sess.run(
         x_adv, feed_dict={x: batch[0],
                           y_: batch[1],
                           training: False})
 
+    classification = sess.run([prediction],
+                              {x: X_adv,
+                               y_: batch[1],
+                               training: False})
+
+    print(classification)
     print('post perturbations accuracy: %g' % accuracy.eval(
         feed_dict={x: X_adv,
                    y_: batch[1],
@@ -130,7 +156,10 @@ def main(_):
 
     output = []
     for i in range(len(X_adv)):
-      output.append([X_adv[i], batch[0][i]])
+      delta = np.subtract(X_adv[i], batch[0][i])
+      output.append([X_adv[i], delta, batch[0][i]])
+
+    #print(output[0][1])
 
 
 if __name__ == "__main__":
