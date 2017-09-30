@@ -120,7 +120,7 @@ def main(_):
     # apply target gradient transform
     target_batch = select_digit_samples(mnist, digits=FLAGS.target)
     with tf.variable_scope('model', reuse=True):
-      grd = get_gradient(deepnn, x)
+      grd = get_gradient(deepnn, x, FLAGS.eps)
 
     # get initial class gradients 
     gradients_og = grd.eval({x: batch[0], y_: batch[1], training: False})
@@ -134,8 +134,8 @@ def main(_):
 
     # wiggle pixels for each image
     X_adv = np.array(batch[0][:])
-    X_adv = X_adv + np.sign(gradients_og)
-    X_adv = X_adv - np.sign(gradients_adv)
+    X_adv = X_adv + np.sign(gradients_og) * FLAGS.eps
+    X_adv = X_adv - np.sign(gradients_adv) * FLAGS.eps
     X_adv = np.clip(X_adv, 0.0, 1.0)
     classification = sess.run([prediction],
                               {x: X_adv,
@@ -150,8 +150,8 @@ def main(_):
       limit = 1000
 
       while classification[0][i] != FLAGS.target and count < limit:
-        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * 0.01
-        X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * 0.01
+        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.01
+        X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps * 0.01
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
         classification = sess.run([prediction],
                                   {x: X_adv,
