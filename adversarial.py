@@ -163,43 +163,49 @@ def main(_):
                    y_: batch[1],
                    training: False}))
 
-    with tf.variable_scope('model', reuse=True):
-      x_adv = fgsm(deepnn, x, FLAGS.eps, epochs=1)
+    # with tf.variable_scope('model', reuse=True):
+    #   x_adv = fgsm(deepnn, x, FLAGS.eps, epochs=1)
 
-    X_adv = sess.run(
-        x_adv, feed_dict={x: batch[0],
-                          y_: batch[1],
-                          training: False})
+    # X_adv = sess.run(
+    #     x_adv, feed_dict={x: batch[0],
+    #                       y_: batch[1],
+    #                       training: False})
 
-    classification = sess.run([prediction],
-                              {x: X_adv,
-                               y_: batch[1],
-                               training: False})
+    # classification = sess.run([prediction],
+    #                           {x: X_adv,
+    #                            y_: batch[1],
+    #                            training: False})
 
-    print(classification)
-    print('post perturbations accuracy: %g' % accuracy.eval(
-        feed_dict={x: X_adv,
-                   y_: batch[1],
-                   training: False}))
+    # print(classification)
+    # print('post perturbations accuracy: %g' % accuracy.eval(
+    #     feed_dict={x: X_adv,
+    #                y_: batch[1],
+    #                training: False}))
 
     # apply target gradient transform
     target_batch = select_digit_samples(mnist, digits=6)
     with tf.variable_scope('model', reuse=True):
       grd = get_gradient(deepnn, x)
 
-    gradients = sess.run(
+    # get initial class gradients 
+    gradients_og = sess.run(grd, {x: batch[0], y_: batch[1], training: False})
+
+    # get gradients from classifying target
+    gradients_adv = sess.run(
         grd, {x: target_batch[0],
               y_: target_batch[1],
               training: False})
 
-    X_adv = X_adv + np.sign(gradients)
+    X_adv = batch[0] + np.sign(gradients_og) * FLAGS.eps / 5
+    X_adv = X_adv - np.sign(gradients_adv) * FLAGS.eps * 2
     X_adv = np.clip(X_adv, 0.0, 1.0)
 
     classification = sess.run([prediction],
                               {x: X_adv,
                                y_: batch[1],
                                training: False})
-
+    percents = sess.run(y, {x: X_adv, y_: batch[1], training: False})
+    print(percents[0])
     print(classification)
     print('post target perturbations accuracy: %g' % accuracy.eval(
         feed_dict={x: X_adv,
