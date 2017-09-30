@@ -38,7 +38,18 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
 
   indices = tf.argmax(ybar, axis=1)
   target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
-
+  # target = [
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  # ]
   eps = tf.abs(eps)
 
   def _cond(x_adv, i):
@@ -46,7 +57,7 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
 
   def _body(x_adv, i):
     ybar, logits = model(x_adv, logits=True)
-    loss = tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits)
+    loss = tf.losses.mean_squared_error(target, ybar)
     dy_dx, = tf.gradients(loss, x_adv)
     x_adv = tf.stop_gradient(x_adv + eps * tf.sign(dy_dx))
     x_adv = tf.clip_by_value(x_adv, clip_min, clip_max)
@@ -59,13 +70,6 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
 
 
 # ------------------------------------------------------#
-
-
-def save_images(images, filenames, output_dir):
-  for i, filename in enumerate(filenames):
-    with tf.gfile.Open(os.path.join(output_dir, filename), 'w') as f:
-      img = (((images[i, :, :, :] + 1.0) * 0.5) * 255.0).astype(np.uint8)
-      Image.fromarray(img).save(f, format='PNG')
 
 
 def select_digit_samples(data, digits=2, sample_size=10):
@@ -95,6 +99,20 @@ def select_digit_samples(data, digits=2, sample_size=10):
       break
 
   return sample_images, sample_labels
+
+
+def write_jpeg(data, filepath):
+  g = tf.Graph()
+  with g.as_default():
+    data_t = tf.placeholder(tf.uint8)
+    op = tf.image.encode_jpeg(data_t, format='grayscale', quality=100)
+
+  with tf.Session(graph=g) as sess:
+    sess.run(tf.global_variables_initializer())
+    data_np = sess.run(op, feed_dict={data_t: data})
+
+  with open(filepath, 'w') as fd:
+    fd.write(data_np)
 
 
 def main(_):
@@ -136,7 +154,7 @@ def main(_):
     print(classification)
 
     with tf.variable_scope('model', reuse=True):
-      x_adv = fgsm(deepnn, x, 0.25)
+      x_adv = fgsm(deepnn, x, 0.25, epochs=1)
 
     X_adv = sess.run(
         x_adv, feed_dict={x: batch[0],
@@ -154,12 +172,21 @@ def main(_):
                    y_: batch[1],
                    training: False}))
 
+    #output images
     output = []
     for i in range(len(X_adv)):
-      delta = np.subtract(X_adv[i], batch[0][i])
-      output.append([X_adv[i], delta, batch[0][i]])
+      original = np.array(batch[0][i]).reshape(28, 28, 1)
+      delta = np.subtract(X_adv[i], batch[0][i]).reshape(28, 28, 1)
+      original_adv = np.array(X_adv[i]).reshape(28, 28, 1)
+
+      out = np.concatenate([original, delta, original_adv], axis=1)
+      out = np.array(out).reshape(28, 84, 1)
+      out = np.multiply(out, 255)
+      output.append(out)
 
     #print(output[0][1])
+    output = np.array(output).reshape(280, 84, 1)
+    write_jpeg(output, "output.jpg".format(i))
 
 
 if __name__ == "__main__":
