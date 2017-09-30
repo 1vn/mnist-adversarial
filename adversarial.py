@@ -7,6 +7,7 @@ import numpy as np
 
 from model import deepnn
 
+tf.flags.DEFINE_float("eps", 0.25, "Epsilon for FGSM.")
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
 tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
 tf.flags.DEFINE_string("saved_model", "saved_model",
@@ -38,18 +39,6 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
 
   indices = tf.argmax(ybar, axis=1)
   target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
-  # target = [
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  #     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-  # ]
   eps = tf.abs(eps)
 
   def _cond(x_adv, i):
@@ -57,10 +46,13 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
 
   def _body(x_adv, i):
     ybar, logits = model(x_adv, logits=True)
-    loss = tf.losses.mean_squared_error(target, ybar)
+    loss = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits),
+        name="cse")
     dy_dx, = tf.gradients(loss, x_adv)
     x_adv = tf.stop_gradient(x_adv + eps * tf.sign(dy_dx))
     x_adv = tf.clip_by_value(x_adv, clip_min, clip_max)
+
     return x_adv, i + 1
 
   x_adv, _ = tf.while_loop(
@@ -70,6 +62,25 @@ def fgsm(model, x, eps=0.01, epochs=1, clip_min=0., clip_max=1.):
 
 
 # ------------------------------------------------------#
+
+
+def get_gradient(model, x, clip_min=0., clip_max=1.):
+  x_grd = tf.identity(x)
+  ybar = model(x_grd)
+  yshape = tf.shape(ybar)
+  ydim = yshape[1]
+
+  indices = tf.argmax(ybar, axis=1)
+  target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
+
+  ybar, logits = model(x_grd, logits=True)
+  loss = tf.reduce_mean(
+      tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits),
+      name="cse")
+
+  dy_dx, = tf.gradients(loss, x_grd)
+
+  return dy_dx
 
 
 def select_digit_samples(data, digits=2, sample_size=10):
@@ -140,11 +151,6 @@ def main(_):
     batch = select_digit_samples(mnist, digits=[2])
 
     # sanity check the accuracy
-    print('pre perturbations accuracy: %g' % accuracy.eval(
-        feed_dict={x: batch[0],
-                   y_: batch[1],
-                   training: False}))
-
     prediction = tf.argmax(y, 1)
     classification = sess.run([prediction],
                               {x: batch[0],
@@ -152,9 +158,13 @@ def main(_):
                                training: False})
 
     print(classification)
+    print('pre perturbations accuracy: %g' % accuracy.eval(
+        feed_dict={x: batch[0],
+                   y_: batch[1],
+                   training: False}))
 
     with tf.variable_scope('model', reuse=True):
-      x_adv = fgsm(deepnn, x, 0.25, epochs=1)
+      x_adv = fgsm(deepnn, x, FLAGS.eps, epochs=1)
 
     X_adv = sess.run(
         x_adv, feed_dict={x: batch[0],
@@ -172,19 +182,46 @@ def main(_):
                    y_: batch[1],
                    training: False}))
 
-    #output images
+    # apply target gradient transform
+    target_batch = select_digit_samples(mnist, digits=6)
+    with tf.variable_scope('model', reuse=True):
+      grd = get_gradient(deepnn, x)
+
+    gradients = sess.run(
+        grd, {x: target_batch[0],
+              y_: target_batch[1],
+              training: False})
+
+    X_adv = X_adv + np.sign(gradients)
+    X_adv = np.clip(X_adv, 0.0, 1.0)
+
+    classification = sess.run([prediction],
+                              {x: X_adv,
+                               y_: batch[1],
+                               training: False})
+
+    print(classification)
+    print('post target perturbations accuracy: %g' % accuracy.eval(
+        feed_dict={x: X_adv,
+                   y_: batch[1],
+                   training: False}))
+
+    # output images
     output = []
     for i in range(len(X_adv)):
+
+      # reshape to be valid image
       original = np.array(batch[0][i]).reshape(28, 28, 1)
-      delta = np.subtract(X_adv[i], batch[0][i]).reshape(28, 28, 1)
+      delta = np.divide(np.subtract(X_adv[i], batch[0][i]), FLAGS.eps).reshape(
+          28, 28, 1)
       original_adv = np.array(X_adv[i]).reshape(28, 28, 1)
 
+      # concatenate to rows
       out = np.concatenate([original, delta, original_adv], axis=1)
       out = np.array(out).reshape(28, 84, 1)
       out = np.multiply(out, 255)
       output.append(out)
 
-    #print(output[0][1])
     output = np.array(output).reshape(280, 84, 1)
     write_jpeg(output, "output.jpg".format(i))
 
