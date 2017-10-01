@@ -20,7 +20,7 @@ def max_pool_2x2(x):
       x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
 
-def deepnn(x, logits=False, training=False):
+def deepnn(x, logits=False, training=True):
   with tf.variable_scope('conv1'):
     try:
       W_conv1 = weight_variable([5, 5, 1, 32])
@@ -61,11 +61,10 @@ def deepnn(x, logits=False, training=False):
   with tf.variable_scope('dropout'):
     h_fc1_drop = tf.layers.dropout(
         h_fc1, rate=0.5, training=training, name='dropout')
-
   with tf.variable_scope('fc2'):
     try:
-      W_fc2 = weight_variable([7 * 7 * 64, 1024])
-      b_fc2 = bias_variable([1024])
+      W_fc2 = weight_variable([1024, 10])
+      b_fc2 = bias_variable([10])
     except ValueError:  # deal with this bug https://github.com/tensorflow/tensorflow/issues/1325   
       W_fc2 = tf.get_default_graph().get_tensor_by_name("model/fc2/weights:0")
       b_fc2 = tf.get_default_graph().get_tensor_by_name("model/fc2/bias:0")

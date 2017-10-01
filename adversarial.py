@@ -19,21 +19,26 @@ tf.flags.DEFINE_string("saved_model", "saved_model",
 FLAGS = tf.app.flags.FLAGS
 
 
-def get_gradient(model, x, clip_min=0., clip_max=1.):
+def get_gradient(model, x):
+  """Returns gradient of network w.r.t. input
+
+
+  Args:
+    model: A function, model function which satisfies the signature
+           def(x, logits) such that the final layer and a
+           logits term is returned when logits parameter
+           is true.
+    x: A Tensor, input placeholder
+  """
   x_grd = tf.identity(x)
-  ybar, logits = model(x_grd, logits=True)
-  yshape = tf.shape(ybar)
-  ydim = yshape[1]
-
-  indices = tf.argmax(ybar, axis=1)
-  target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
-
+  y_, logits = model(x_grd, logits=True)
+  predict = tf.argmax(y_, axis=1)
+  target = tf.one_hot(predict, tf.shape(y_)[1], on_value=1.0, off_value=0.0)
   loss = tf.reduce_mean(
       tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits),
       name="cse")
 
   dy_dx, = tf.gradients(loss, x_grd)
-
   return dy_dx
 
 
@@ -91,11 +96,6 @@ def main(_):
     # populate graph and get variables
     graph = tf.get_default_graph()
 
-    # workaround for get_variable bug
-    # https://github.com/tensorflow/tensorflow/issues/1325    
-    for t in tf.global_variables():
-      graph.get_tensor_by_name(t.name)
-
     x = graph.get_tensor_by_name("model/x:0")
     y_ = graph.get_tensor_by_name("model/y_:0")
     training = graph.get_tensor_by_name("model/mode:0")
@@ -106,7 +106,7 @@ def main(_):
         mnist, digits=FLAGS.initial, sample_size=FLAGS.sample_size)
 
     # sanity check the accuracy
-    prediction = tf.argmax(y, 1)
+    prediction = tf.argmax(y, axis=1)
     classification = sess.run([prediction],
                               {x: batch[0],
                                y_: batch[1],
@@ -122,7 +122,7 @@ def main(_):
     target_batch = select_digit_samples(
         mnist, digits=FLAGS.target, sample_size=FLAGS.sample_size)
     with tf.variable_scope('model', reuse=True):
-      grd = get_gradient(deepnn, x, FLAGS.eps)
+      grd = get_gradient(deepnn, x)
 
     # get initial class gradients 
     gradients_og = grd.eval({x: batch[0], y_: batch[1], training: False})
@@ -156,7 +156,7 @@ def main(_):
       limit = 10000
 
       while classification[0][i] != FLAGS.target and count < limit:
-        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.005
+        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.001
         X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps * 0.01
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
         classification[0][i] = sess.run(
