@@ -13,10 +13,16 @@ tf.flags.DEFINE_integer("target", 6, "Target class to pertubate to.")
 tf.flags.DEFINE_integer("sample_size", 10, "Number of samples to generate.")
 tf.flags.DEFINE_float("eps", 0.25, "Epsilon for FGSM.")
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
+tf.flags.DEFINE_boolean("verbose", False, "Print info if true")
 tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
 tf.flags.DEFINE_string("saved_model", "saved_model",
                        "The folder containing saved model")
 FLAGS = tf.app.flags.FLAGS
+
+
+def printOut(s):
+  if FLAGS.verbose:
+    print(s)
 
 
 def get_gradient(model, x):
@@ -170,7 +176,7 @@ def main(_):
         })
 
         percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
-        print("image {} - target {}: {}, current {}: {}".format(
+        printOut("image {} - target {}: {}, current {}: {}".format(
             i + 1, FLAGS.target, percent[FLAGS.target], classification[0][i],
             percent[classification[0][i]]))
 
@@ -179,7 +185,7 @@ def main(_):
           print("found delta for image {}".format(i + 1))
 
         if count == limit:
-          print("exit due to limit")
+          printOut("exit due to limit")
 
     classification = sess.run([prediction],
                               {x: X_adv,
