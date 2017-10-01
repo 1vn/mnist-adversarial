@@ -154,7 +154,7 @@ def main(_):
         training: False
     })
 
-    # wiggle pixels for each image
+    # wiggle pixels towards target class
     X_adv = np.array(batch[0][:])
     classification = sess.run([prediction],
                               {x: X_adv,
@@ -168,10 +168,11 @@ def main(_):
     for i in range(len(X_adv)):
       count = 0
 
-      # need this until proof that wiggling algorithm will converge
+      # need this in case wiggling doesn't converge (i.e. too large of eps)
       limit = FLAGS.wiggle_steps
 
       while classification[0][i] != FLAGS.target and count < limit:
+        # modified version of fast gradient sign method
         X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
 
