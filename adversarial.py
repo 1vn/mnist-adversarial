@@ -21,14 +21,13 @@ FLAGS = tf.app.flags.FLAGS
 
 def get_gradient(model, x, clip_min=0., clip_max=1.):
   x_grd = tf.identity(x)
-  ybar = model(x_grd)
+  ybar, logits = model(x_grd, logits=True)
   yshape = tf.shape(ybar)
   ydim = yshape[1]
 
   indices = tf.argmax(ybar, axis=1)
   target = tf.one_hot(indices, ydim, on_value=1.0, off_value=0.0)
 
-  ybar, logits = model(x_grd, logits=True)
   loss = tf.reduce_mean(
       tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits),
       name="cse")
@@ -147,30 +146,38 @@ def main(_):
                                y_: batch[1],
                                training: False})
 
+    percent = y.eval({x: X_adv, y_: batch[1], training: False})
     # wiggling
     print("wiggling...")
     for i in range(len(X_adv)):
       count = 0
 
       # need this until proof that wiggling algorithm will converge
-      limit = 1000
+      limit = 10000
 
       while classification[0][i] != FLAGS.target and count < limit:
         X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.005
         X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps * 0.01
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
-        classification = sess.run([prediction],
-                                  {x: X_adv,
-                                   y_: batch[1],
-                                   training: False})
-        gradients_adv = grd.eval({
-            x: X_adv,
-            y_: target_batch[1],
+        classification[0][i] = sess.run(
+            [prediction], {x: [X_adv[i]],
+                           y_: [batch[1][i]],
+                           training: False})[0][0]
+        gradients_adv[i] = grd.eval({
+            x: [X_adv[i]],
+            y_: [target_batch[1][i]],
             training: False
-        })
+        })[0]
 
-        percent = y.eval({x: X_adv, y_: batch[1], training: False})
+        percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
+        print("image {} - target {}: {}, current {}: {}".format(
+            i + 1, FLAGS.target, percent[FLAGS.target], classification[0][i],
+            percent[classification[0][i]]))
+
         count += 1
+        if classification[0][i] == FLAGS.target:
+          print("found delta for image {}".format(i + 1))
+
         if count == limit:
           print("exit due to limit")
 
@@ -181,7 +188,7 @@ def main(_):
     print(classification)
     print('post target perturbations accuracy: %g' % accuracy.eval(
         feed_dict={x: X_adv,
-                   y_: batch[1],
+                   y_: target_batch[1],
                    training: False}))
 
     # output images
