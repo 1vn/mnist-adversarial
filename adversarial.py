@@ -163,11 +163,11 @@ def main(_):
             [prediction], {x: [X_adv[i]],
                            y_: [batch[1][i]],
                            training: False})[0][0]
-        gradients_adv[i] = grd.eval({
-            x: [X_adv[i]],
-            y_: [target_batch[1][i]],
+        gradients_adv = grd.eval({
+            x: X_adv,
+            y_: target_batch[1],
             training: False
-        })[0]
+        })
 
         percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
         print("image {} - target {}: {}, current {}: {}".format(
