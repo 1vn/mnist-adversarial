@@ -10,8 +10,11 @@ from model import deepnn
 tf.flags.DEFINE_integer("initial", 2,
                         "Initial class selected for perturbations.")
 tf.flags.DEFINE_integer("target", 6, "Target class to pertubate to.")
+tf.flags.DEFINE_integer("wiggle_steps", 10000,
+                        "Maximum amount of wiggling before stopping.")
 tf.flags.DEFINE_integer("sample_size", 10, "Number of samples to generate.")
-tf.flags.DEFINE_float("eps", 0.25, "Epsilon for FGSM.")
+tf.flags.DEFINE_float("eps", 0.01,
+                      "Multiplier for wiggling towards target class.")
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
 tf.flags.DEFINE_boolean("verbose", False, "Print info if true")
 tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
@@ -91,6 +94,20 @@ def write_jpeg(data, filepath):
     fd.write(data_np)
 
 
+def logOps(x, y_, training, X_adv, batch, classification, i, count, limit, y):
+  percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
+  printOut("image {} - target {}: {}, current {}: {}".format(
+      i + 1, FLAGS.target, percent[FLAGS.target], classification[0][i], percent[
+          classification[0][i]]))
+
+  count += 1
+  if classification[0][i] == FLAGS.target:
+    print("found delta for image {}".format(i + 1))
+
+  if count == limit:
+    printOut("exit due to limit")
+
+
 def main(_):
   mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
   with tf.Session() as sess:
@@ -130,9 +147,6 @@ def main(_):
     with tf.variable_scope('model', reuse=True):
       grd = get_gradient(deepnn, x)
 
-    # get initial class gradients 
-    gradients_og = grd.eval({x: batch[0], y_: batch[1], training: False})
-
     # get gradients from classifying target
     gradients_adv = grd.eval({
         x: target_batch[0],
@@ -141,51 +155,40 @@ def main(_):
     })
 
     # wiggle pixels for each image
-
-    # for some reason this makes the output image better
     X_adv = np.array(batch[0][:])
-    X_adv = X_adv + np.sign(gradients_og) * FLAGS.eps
-    X_adv = X_adv - np.sign(gradients_adv) * FLAGS.eps
-    X_adv = np.clip(X_adv, 0.0, 1.0)
     classification = sess.run([prediction],
                               {x: X_adv,
                                y_: batch[1],
                                training: False})
 
     percent = y.eval({x: X_adv, y_: batch[1], training: False})
+
     # wiggling
     print("wiggling...")
     for i in range(len(X_adv)):
       count = 0
 
       # need this until proof that wiggling algorithm will converge
-      limit = 10000
+      limit = FLAGS.wiggle_steps
 
       while classification[0][i] != FLAGS.target and count < limit:
-        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.001
-        X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps * 0.01
+        X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
+
+        # referesh gradients and classes
         classification[0][i] = sess.run(
             [prediction], {x: [X_adv[i]],
                            y_: [batch[1][i]],
                            training: False})[0][0]
+
         gradients_adv = grd.eval({
             x: X_adv,
             y_: target_batch[1],
             training: False
         })
 
-        percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
-        printOut("image {} - target {}: {}, current {}: {}".format(
-            i + 1, FLAGS.target, percent[FLAGS.target], classification[0][i],
-            percent[classification[0][i]]))
-
-        count += 1
-        if classification[0][i] == FLAGS.target:
-          print("found delta for image {}".format(i + 1))
-
-        if count == limit:
-          printOut("exit due to limit")
+        logOps(x, y_, training, X_adv, batch, classification, i, count, limit,
+               y)
 
     classification = sess.run([prediction],
                               {x: X_adv,
@@ -203,8 +206,7 @@ def main(_):
 
       # reshape to be valid image
       original = np.array(batch[0][i]).reshape(28, 28, 1)
-      delta = np.divide(np.subtract(X_adv[i], batch[0][i]), FLAGS.eps).reshape(
-          28, 28, 1)
+      delta = np.subtract(X_adv[i], batch[0][i]).reshape(28, 28, 1)
       original_adv = np.array(X_adv[i]).reshape(28, 28, 1)
 
       # concatenate to rows
