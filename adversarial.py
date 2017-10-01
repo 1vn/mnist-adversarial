@@ -10,6 +10,7 @@ from model import deepnn
 tf.flags.DEFINE_integer("initial", 2,
                         "Initial class selected for perturbations.")
 tf.flags.DEFINE_integer("target", 6, "Target class to pertubate to.")
+tf.flags.DEFINE_integer("sample_size", 10, "Number of samples to generate.")
 tf.flags.DEFINE_float("eps", 0.25, "Epsilon for FGSM.")
 tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
 tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
@@ -102,7 +103,8 @@ def main(_):
     y = graph.get_tensor_by_name("model/y:0")
     accuracy = graph.get_tensor_by_name("model/acc:0")
 
-    batch = select_digit_samples(mnist, digits=FLAGS.initial)
+    batch = select_digit_samples(
+        mnist, digits=FLAGS.initial, sample_size=FLAGS.sample_size)
 
     # sanity check the accuracy
     prediction = tf.argmax(y, 1)
@@ -118,7 +120,8 @@ def main(_):
                    training: False}))
 
     # apply target gradient transform
-    target_batch = select_digit_samples(mnist, digits=FLAGS.target)
+    target_batch = select_digit_samples(
+        mnist, digits=FLAGS.target, sample_size=FLAGS.sample_size)
     with tf.variable_scope('model', reuse=True):
       grd = get_gradient(deepnn, x, FLAGS.eps)
 
@@ -153,7 +156,7 @@ def main(_):
       limit = 1000
 
       while classification[0][i] != FLAGS.target and count < limit:
-        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.01
+        X_adv[i] = X_adv[i] - np.sign(gradients_og[i]) * FLAGS.eps * 0.005
         X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps * 0.01
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
         classification = sess.run([prediction],
@@ -165,8 +168,6 @@ def main(_):
             y_: target_batch[1],
             training: False
         })
-
-        #gradients_og = grd.eval({x: X_adv, y_: batch[1], training: False})
 
         percent = y.eval({x: X_adv, y_: batch[1], training: False})
         count += 1
@@ -199,7 +200,7 @@ def main(_):
       out = np.multiply(out, 255)
       output.append(out)
 
-    output = np.array(output).reshape(280, 84, 1)
+    output = np.array(output).reshape(28 * FLAGS.sample_size, 84, 1)
     write_jpeg(output, "output.jpg".format(i))
 
 
