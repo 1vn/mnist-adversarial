@@ -222,7 +222,8 @@ def main(_):
     for i in range(len(x_adv)):
       # reshape to be valid image
       original = np.array(origin_batch[0][i]).reshape(28, 28, 1)
-      delta = np.subtract(x_adv[i], origin_batch[0][i]).reshape(28, 28, 1)
+      delta = np.abs(np.subtract(x_adv[i], origin_batch[0][i])).reshape(
+          28, 28, 1)
       original_adv = np.array(x_adv[i]).reshape(28, 28, 1)
 
       # concatenate to rows
