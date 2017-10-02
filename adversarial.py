@@ -160,6 +160,7 @@ def main(_):
       # need this in case wiggling doesn't converge (i.e. too large of eps)
       limit = FLAGS.wiggle_steps
 
+      # initial classification pre-wiggling
       classification = sess.run([prediction], {
           x: [X_adv[i]],
           y_: [origin_batch[1][i]],
@@ -199,7 +200,7 @@ def main(_):
                    y_: target_batch[1],
                    training: False}))
 
-    # output images
+    # write images to disk
     output = []
     for i in range(len(X_adv)):
 
