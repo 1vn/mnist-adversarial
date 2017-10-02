@@ -5,7 +5,7 @@ This is an end to end example of using adversarial examples to exploit a deep co
 ## Instructions
 1. Run `train.py` to get a trained mnist classifier using the deep convolutional network described [here](https://www.tensorflow.org/get_started/mnist/pros#deep-mnist-for-experts). By default, the saved model will be trained on MNIST for 1000 steps, save MNIST data to `tmp/data` and write its `model.meta` file to `tmp/run`.
 
-2. Run `adversarial.py`. By default, this will generate 10 adversarial examples for MNIST "2" samples which are classified by the trained network as "6", create an image consisting of 3 columns (original, delta, adversarial example) containing each of the 10 examples.
+2. Run `adversarial.py`. By default, this will generate 10 adversarial examples for MNIST "2" samples which are classified by the trained network as "6", create an image `output.jpg` containing 3 columns (original, delta, adversarial example) and rows being each of the 10 examples.
 
 # Parameters
 ## train.py
