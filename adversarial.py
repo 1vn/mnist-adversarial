@@ -144,15 +144,16 @@ def main(_):
     origin_batch = select_digit_samples(
         mnist, digits=FLAGS.origin, sample_size=FLAGS.sample_size)
 
-    # sanity check the accuracy
     prediction = tf.argmax(y, axis=1)
-    classification = sess.run([prediction], {
+
+    # sanity check the origin accuracy
+    classification = prediction.eval({
         x: origin_batch[0],
         y_: origin_batch[1],
         training: False
     })
 
-    print(classification)
+    print("pre perturbations predictions: {}".format(classification))
     print('pre perturbations accuracy on origin class: %g' % accuracy.eval(
         feed_dict={x: origin_batch[0],
                    y_: origin_batch[1],
@@ -169,7 +170,7 @@ def main(_):
     # wiggle pixels towards target class
     x_adv = origin_batch[0][:]
 
-    print("wiggling...")
+    print("wiggling {} images...".format(FLAGS.sample_size))
     for i in range(len(x_adv)):
       count = 0
 
@@ -210,7 +211,7 @@ def main(_):
         y_: origin_batch[1],
         training: False
     })
-    print(classification)
+    print("post perturbations predictions".format(classification))
     print('post target perturbations accuracy on target class: %g' % accuracy.
           eval(feed_dict={x: x_adv,
                           y_: target_batch[1],
