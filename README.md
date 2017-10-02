@@ -1,6 +1,6 @@
 # Adversarial Generator for MNIST
 
-This is an end to end example of using adversarial examples to exploit a deep convolutional MNIST classifier. It uses the wiggling method as described in [Andrej Karpathy's blog post](http://karpathy.github.io/2015/03/30/breaking-convnets/)
+This is an end to end simple example of using adversarial examples to exploit a deep convolutional MNIST classifier. It uses the targetted wiggling method as described in [Andrej Karpathy's blog post](http://karpathy.github.io/2015/03/30/breaking-convnets/)
 
 ## Instructions
 1. Run `train.py` to get a trained mnist classifier using the deep convolutional network described [here](https://www.tensorflow.org/get_started/mnist/pros#deep-mnist-for-experts). By default, the saved model will be trained on MNIST for 1000 steps, save MNIST data to `tmp/data` and write its `model.meta` file to `tmp/run`.

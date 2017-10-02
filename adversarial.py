@@ -29,10 +29,8 @@ tf.flags.DEFINE_string("model_file", "model.meta",
 tf.flags.DEFINE_string(
     "model_dir", "tmp/run",
     "The model directory to load the trained MNIST classifier.")
-tf.flags.DEFINE_string(
-    "output", "output.jpg",
-    "The desired filename of the output table image. It contains 3 columns (original, delta, adversarial example) and sample_size number of rows with each row being a generated example."
-)
+tf.flags.DEFINE_string("output", "output.jpg",
+                       "The desired filename of the output table image.")
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -155,7 +153,7 @@ def main(_):
     })
 
     print(classification)
-    print('pre perturbations accuracy: %g' % accuracy.eval(
+    print('pre perturbations accuracy on origin class: %g' % accuracy.eval(
         feed_dict={x: origin_batch[0],
                    y_: origin_batch[1],
                    training: False}))
@@ -186,7 +184,6 @@ def main(_):
       })[0]
 
       while classification != FLAGS.target and count < limit:
-
         # get gradients from classifying target class
         gradients_adv = grd.eval({
             x: [x_adv[i]],
@@ -214,10 +211,10 @@ def main(_):
         training: False
     })
     print(classification)
-    print('post target perturbations accuracy: %g' % accuracy.eval(
-        feed_dict={x: x_adv,
-                   y_: target_batch[1],
-                   training: False}))
+    print('post target perturbations accuracy on target class: %g' % accuracy.
+          eval(feed_dict={x: x_adv,
+                          y_: target_batch[1],
+                          training: False}))
 
     # write images to disk
     output = []
