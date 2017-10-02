@@ -3,8 +3,10 @@ from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
 from model import deepnn
 
-tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
-tf.flags.DEFINE_string("output_dir", "tmp/run", "The output directory.")
+tf.flags.DEFINE_string("data_dir", "tmp/data",
+                       "The data directory to save/load MNIST data.")
+tf.flags.DEFINE_string("output_dir", "tmp/run",
+                       "The output directory for the trained model.")
 tf.flags.DEFINE_integer("train_steps", 1000, "The amount of steps to train.")
 FLAGS = tf.app.flags.FLAGS
 

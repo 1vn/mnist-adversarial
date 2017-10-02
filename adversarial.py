@@ -7,19 +7,32 @@ import numpy as np
 
 from model import deepnn
 
-tf.flags.DEFINE_integer("initial", 2,
-                        "Initial class selected for perturbations.")
-tf.flags.DEFINE_integer("target", 6, "Target class to pertubate to.")
-tf.flags.DEFINE_integer("wiggle_steps", 10000,
-                        "Maximum amount of wiggling before stopping.")
-tf.flags.DEFINE_integer("sample_size", 10, "Number of samples to generate.")
-tf.flags.DEFINE_float("eps", 0.01,
-                      "Multiplier for wiggling towards target class.")
-tf.flags.DEFINE_string("data_dir", "tmp/data", "The data directory.")
+tf.flags.DEFINE_integer(
+    "origin", 2, "The origin MNIST class to generate adversarial examples for.")
+tf.flags.DEFINE_integer(
+    "target", 6, "The target MNIST class to pertubate origin samples into.")
+tf.flags.DEFINE_integer(
+    "wiggle_steps", 10000,
+    "Upper bound on the number of wiggle operations in case epsilon is too big.")
+tf.flags.DEFINE_integer(
+    "sample_size", 10,
+    "The number of samples to generate. (origin.sample_size = target.sample_size)"
+)
+tf.flags.DEFINE_float(
+    "eps", 0.01,
+    "The epsilon amount to wiggle towards the network gradient of target class.")
+tf.flags.DEFINE_string("data_dir", "tmp/data",
+                       "The data directory to save/load MNIST data.")
 tf.flags.DEFINE_boolean("verbose", False, "Print info if true")
-tf.flags.DEFINE_string("meta", "model.meta", "The saved meta graph")
-tf.flags.DEFINE_string("saved_model", "saved_model",
-                       "The folder containing saved model")
+tf.flags.DEFINE_string("model_file", "model.meta",
+                       "The filename of the saved meta graph.")
+tf.flags.DEFINE_string(
+    "model_dir", "tmp/run",
+    "The model directory to load the trained MNIST classifier.")
+tf.flags.DEFINE_string(
+    "output", "output.jpg",
+    "The desired filename of the output table image. It contains 3 columns (original, delta, adversarial example) and sample_size number of rows with each row being a generated example."
+)
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -80,6 +93,7 @@ def select_digit_samples(data, digits=2, sample_size=10):
   return sample_images, sample_labels
 
 
+# from https://stackoverflow.com/questions/40320271/how-do-we-use-tf-image-encode-jpeg-to-write-out-an-image-in-tensorflow
 def write_jpeg(data, filepath):
   g = tf.Graph()
   with g.as_default():
@@ -113,8 +127,8 @@ def main(_):
   with tf.Session() as sess:
 
     # restore model
-    saver = tf.train.import_meta_graph(FLAGS.saved_model + "/" + FLAGS.meta)
-    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.saved_model))
+    saver = tf.train.import_meta_graph(FLAGS.model_dir + "/" + FLAGS.model_file)
+    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.model_dir))
 
     # populate graph and get variables
     graph = tf.get_default_graph()
@@ -126,7 +140,7 @@ def main(_):
 
     # get origin class examples
     origin_batch = select_digit_samples(
-        mnist, digits=FLAGS.initial, sample_size=FLAGS.sample_size)
+        mnist, digits=FLAGS.origin, sample_size=FLAGS.sample_size)
 
     # sanity check the accuracy
     prediction = tf.argmax(y, axis=1)
@@ -216,7 +230,7 @@ def main(_):
       output.append(out)
 
     output = np.array(output).reshape(28 * FLAGS.sample_size, 84, 1)
-    write_jpeg(output, "output.jpg".format(i))
+    write_jpeg(output, FLAGS.output)
 
 
 if __name__ == "__main__":
