@@ -11,7 +11,7 @@ This is an end to end example of using adversarial examples to exploit a deep co
 ## train.py
 - `--data_dir`: The data directory to save/load MNIST data.
 - `--output_dir`: The output directory for the trained model.
-- `--train_steps`: The amount of steps to train. (Observation, models which are triande with more steps take longer to generate adversarial examples for!)
+- `--train_steps`: The amount of steps to train. (Observation: models which are triande with more steps take longer to generate adversarial examples for.)
 
 ## adversarial.py
 - `--origin`: The origin MNIST class to generate adversarial examples for.
