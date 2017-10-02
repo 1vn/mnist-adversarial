@@ -108,12 +108,16 @@ def write_jpeg(data, filepath):
     fd.write(data_np)
 
 
-def logOps(x, y_, training, X_adv, batch, classification, i, count, limit, y):
-  percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
+def logOps(x, y_, training, x_adv, origin_batch, classification, i, count,
+           limit, y):
+  percent = y.eval({
+      x: [x_adv[i]],
+      y_: [origin_batch[1][i]],
+      training: False
+  })[0]
   printOut("image {} - target {}: {}, current {}: {}".format(
       i + 1, FLAGS.target, percent[FLAGS.target], classification, percent[
           classification]))
-
   count += 1
   if classification == FLAGS.target:
     print("found delta for image {}".format(i + 1))
@@ -164,64 +168,64 @@ def main(_):
     target_batch = select_digit_samples(
         mnist, digits=FLAGS.target, sample_size=FLAGS.sample_size)
 
-    X_adv = origin_batch[0][:]
-
     # wiggle pixels towards target class
+    x_adv = origin_batch[0][:]
+
     print("wiggling...")
-    for i in range(len(X_adv)):
+    for i in range(len(x_adv)):
       count = 0
 
       # need this in case wiggling doesn't converge (i.e. too large of eps)
       limit = FLAGS.wiggle_steps
 
-      # initial classification pre-wiggling
-      classification = sess.run([prediction], {
-          x: [X_adv[i]],
+      # initial pre-wiggling classification
+      classification = prediction.eval({
+          x: [x_adv[i]],
           y_: [origin_batch[1][i]],
           training: False
-      })[0][0]
+      })[0]
 
       while classification != FLAGS.target and count < limit:
 
-        # get gradients from classifying target
+        # get gradients from classifying target class
         gradients_adv = grd.eval({
-            x: [X_adv[i]],
+            x: [x_adv[i]],
             y_: [target_batch[1][i]],
             training: False
         })[0]
 
         # modified version of fast gradient sign method
-        X_adv[i] = X_adv[i] + np.sign(gradients_adv) * FLAGS.eps
-        X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
+        x_adv[i] = x_adv[i] + np.sign(gradients_adv) * FLAGS.eps
+        x_adv[i] = np.clip(x_adv[i], 0.0, 1.0)
 
         # re-evaluate class
-        classification = sess.run([prediction], {
-            x: [X_adv[i]],
+        classification = prediction.eval({
+            x: [x_adv[i]],
             y_: [origin_batch[1][i]],
             training: False
-        })[0][0]
+        })[0]
 
-        logOps(x, y_, training, X_adv, origin_batch, classification, i, count,
+        logOps(x, y_, training, x_adv, origin_batch, classification, i, count,
                limit, y)
 
-    classification = sess.run([prediction],
-                              {x: X_adv,
-                               y_: origin_batch[1],
-                               training: False})
+    classification = prediction.eval({
+        x: x_adv,
+        y_: origin_batch[1],
+        training: False
+    })
     print(classification)
     print('post target perturbations accuracy: %g' % accuracy.eval(
-        feed_dict={x: X_adv,
+        feed_dict={x: x_adv,
                    y_: target_batch[1],
                    training: False}))
 
     # write images to disk
     output = []
-    for i in range(len(X_adv)):
-
+    for i in range(len(x_adv)):
       # reshape to be valid image
       original = np.array(origin_batch[0][i]).reshape(28, 28, 1)
-      delta = np.subtract(X_adv[i], origin_batch[0][i]).reshape(28, 28, 1)
-      original_adv = np.array(X_adv[i]).reshape(28, 28, 1)
+      delta = np.subtract(x_adv[i], origin_batch[0][i]).reshape(28, 28, 1)
+      original_adv = np.array(x_adv[i]).reshape(28, 28, 1)
 
       # concatenate to rows
       out = np.concatenate([original, delta, original_adv], axis=1)
