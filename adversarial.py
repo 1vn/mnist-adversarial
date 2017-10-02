@@ -97,11 +97,11 @@ def write_jpeg(data, filepath):
 def logOps(x, y_, training, X_adv, batch, classification, i, count, limit, y):
   percent = y.eval({x: [X_adv[i]], y_: [batch[1][i]], training: False})[0]
   printOut("image {} - target {}: {}, current {}: {}".format(
-      i + 1, FLAGS.target, percent[FLAGS.target], classification[0][i], percent[
-          classification[0][i]]))
+      i + 1, FLAGS.target, percent[FLAGS.target], classification, percent[
+          classification]))
 
   count += 1
-  if classification[0][i] == FLAGS.target:
+  if classification == FLAGS.target:
     print("found delta for image {}".format(i + 1))
 
   if count == limit:
@@ -118,52 +118,41 @@ def main(_):
 
     # populate graph and get variables
     graph = tf.get_default_graph()
-
     x = graph.get_tensor_by_name("model/x:0")
     y_ = graph.get_tensor_by_name("model/y_:0")
     training = graph.get_tensor_by_name("model/mode:0")
     y = graph.get_tensor_by_name("model/y:0")
     accuracy = graph.get_tensor_by_name("model/acc:0")
 
-    batch = select_digit_samples(
+    # get origin class examples
+    origin_batch = select_digit_samples(
         mnist, digits=FLAGS.initial, sample_size=FLAGS.sample_size)
 
     # sanity check the accuracy
     prediction = tf.argmax(y, axis=1)
-    classification = sess.run([prediction],
-                              {x: batch[0],
-                               y_: batch[1],
-                               training: False})
-
-    print(classification)
-    print('pre perturbations accuracy: %g' % accuracy.eval(
-        feed_dict={x: batch[0],
-                   y_: batch[1],
-                   training: False}))
-
-    # apply target gradient transform
-    target_batch = select_digit_samples(
-        mnist, digits=FLAGS.target, sample_size=FLAGS.sample_size)
-    with tf.variable_scope('model', reuse=True):
-      grd = get_gradient(deepnn, x)
-
-    # get gradients from classifying target
-    gradients_adv = grd.eval({
-        x: target_batch[0],
-        y_: target_batch[1],
+    classification = sess.run([prediction], {
+        x: origin_batch[0],
+        y_: origin_batch[1],
         training: False
     })
 
+    print(classification)
+    print('pre perturbations accuracy: %g' % accuracy.eval(
+        feed_dict={x: origin_batch[0],
+                   y_: origin_batch[1],
+                   training: False}))
+
+    # gradient operation
+    with tf.variable_scope('model', reuse=True):
+      grd = get_gradient(deepnn, x)
+
+    # get target class examples
+    target_batch = select_digit_samples(
+        mnist, digits=FLAGS.target, sample_size=FLAGS.sample_size)
+
+    X_adv = origin_batch[0][:]
+
     # wiggle pixels towards target class
-    X_adv = np.array(batch[0][:])
-    classification = sess.run([prediction],
-                              {x: X_adv,
-                               y_: batch[1],
-                               training: False})
-
-    percent = y.eval({x: X_adv, y_: batch[1], training: False})
-
-    # wiggling
     print("wiggling...")
     for i in range(len(X_adv)):
       count = 0
@@ -171,29 +160,38 @@ def main(_):
       # need this in case wiggling doesn't converge (i.e. too large of eps)
       limit = FLAGS.wiggle_steps
 
-      while classification[0][i] != FLAGS.target and count < limit:
+      classification = sess.run([prediction], {
+          x: [X_adv[i]],
+          y_: [origin_batch[1][i]],
+          training: False
+      })[0][0]
+
+      while classification != FLAGS.target and count < limit:
+
+        # get gradients from classifying target
+        gradients_adv = grd.eval({
+            x: [X_adv[i]],
+            y_: [target_batch[1][i]],
+            training: False
+        })[0]
+
         # modified version of fast gradient sign method
-        X_adv[i] = X_adv[i] + np.sign(gradients_adv[i]) * FLAGS.eps
+        X_adv[i] = X_adv[i] + np.sign(gradients_adv) * FLAGS.eps
         X_adv[i] = np.clip(X_adv[i], 0.0, 1.0)
 
-        # referesh gradients and classes
-        classification[0][i] = sess.run(
-            [prediction], {x: [X_adv[i]],
-                           y_: [batch[1][i]],
-                           training: False})[0][0]
-
-        gradients_adv = grd.eval({
-            x: X_adv,
-            y_: target_batch[1],
+        # re-evaluate class
+        classification = sess.run([prediction], {
+            x: [X_adv[i]],
+            y_: [origin_batch[1][i]],
             training: False
-        })
+        })[0][0]
 
-        logOps(x, y_, training, X_adv, batch, classification, i, count, limit,
-               y)
+        logOps(x, y_, training, X_adv, origin_batch, classification, i, count,
+               limit, y)
 
     classification = sess.run([prediction],
                               {x: X_adv,
-                               y_: batch[1],
+                               y_: origin_batch[1],
                                training: False})
     print(classification)
     print('post target perturbations accuracy: %g' % accuracy.eval(
@@ -206,8 +204,8 @@ def main(_):
     for i in range(len(X_adv)):
 
       # reshape to be valid image
-      original = np.array(batch[0][i]).reshape(28, 28, 1)
-      delta = np.subtract(X_adv[i], batch[0][i]).reshape(28, 28, 1)
+      original = np.array(origin_batch[0][i]).reshape(28, 28, 1)
+      delta = np.subtract(X_adv[i], origin_batch[0][i]).reshape(28, 28, 1)
       original_adv = np.array(X_adv[i]).reshape(28, 28, 1)
 
       # concatenate to rows
