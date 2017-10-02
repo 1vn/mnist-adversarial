@@ -208,10 +208,10 @@ def main(_):
 
     classification = prediction.eval({
         x: x_adv,
-        y_: origin_batch[1],
+        y_: target_batch[1],
         training: False
     })
-    print("post perturbations predictions".format(classification))
+    print("post perturbations predictions: {}".format(classification))
     print('post target perturbations accuracy on target class: %g' % accuracy.
           eval(feed_dict={x: x_adv,
                           y_: target_batch[1],
