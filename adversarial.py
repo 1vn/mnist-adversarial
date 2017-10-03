@@ -51,11 +51,10 @@ def get_gradient(model, x):
     x: A Tensor, input placeholder
   """
   x_grd = tf.identity(x)
-  y_, logits = model(x_grd, logits=True)
-  predict = tf.argmax(y_, axis=1)
-  target = tf.one_hot(predict, tf.shape(y_)[1], on_value=1.0, off_value=0.0)
+  _, logits = model(x_grd, logits=True)
+  y_ = tf.get_default_graph().get_tensor_by_name("model/y_:0")
   loss = tf.reduce_mean(
-      tf.nn.softmax_cross_entropy_with_logits(labels=target, logits=logits),
+      tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits),
       name="cse")
 
   dy_dx, = tf.gradients(loss, x_grd)
@@ -159,13 +158,13 @@ def main(_):
                    y_: origin_batch[1],
                    training: False}))
 
-    # gradient operation
-    with tf.variable_scope('model', reuse=True):
-      grd = get_gradient(deepnn, x)
-
     # get target class examples
     target_batch = select_digit_samples(
         mnist, digits=FLAGS.target, sample_size=FLAGS.sample_size)
+
+    # gradient operation
+    with tf.variable_scope('model', reuse=True):
+      grd = get_gradient(deepnn, x)
 
     # wiggle pixels towards target class
     x_adv = origin_batch[0][:]
@@ -193,7 +192,7 @@ def main(_):
         })[0]
 
         # modified version of fast gradient sign method
-        x_adv[i] = x_adv[i] + np.sign(gradients_adv) * FLAGS.eps
+        x_adv[i] = x_adv[i] - np.sign(gradients_adv) * FLAGS.eps
         x_adv[i] = np.clip(x_adv[i], 0.0, 1.0)
 
         # re-evaluate class
